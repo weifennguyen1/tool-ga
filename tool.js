@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { Builder, By, until } = require('selenium-webdriver');
+const chrome = require('selenium-webdriver/chrome');
 
 function exportNumbersToExcel(numbers) {
   const output = numbers.join('\n');
@@ -10,7 +11,8 @@ function exportNumbersToExcel(numbers) {
 async function extractFacebookCommentTexts() {
   const page = fs.readFileSync('link.txt', 'utf8');
 
-  const driver = await new Builder().forBrowser('chrome').build();
+  const options = new chrome.Options().addArguments('--headless=new');
+  const driver = await new Builder().forBrowser('chrome').setChromeOptions(options).build();
 
   try {
     // Load cookies from file
@@ -56,7 +58,7 @@ async function extractFacebookCommentTexts() {
       await filterButton.click();
       await driver.sleep(1000);
 
-      const allCommentsOption = await driver.findElement(By.xpath("//span[text()='All comments']"));
+      const allCommentsOption = await driver.findElement(By.xpath("//span[text()='Newest']"));
       await allCommentsOption.click();
       await driver.sleep(2000);
     } catch (err) {

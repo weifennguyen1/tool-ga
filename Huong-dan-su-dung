@@ -1,4 +1,4 @@
 1. open file tool.js
 2. replace link of post page and save the file
-3. type terminal: 'node tool.js' and enter
-4. -> 'node get-number.js'
+node tool.js
+node random.js
