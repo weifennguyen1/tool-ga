@@ -1,133 +1,156 @@
+const puppeteer = require('puppeteer');
 const fs = require('fs');
-const { Builder, By, until } = require('selenium-webdriver');
+const readline = require('readline/promises');
+const { exec } = require('child_process');
 
-function exportNumbersToExcel(numbers) {
+var FACEBOOK_POST_URL = '';
+const COOKIES_PATH = './www.facebook.com_06-07-2025.json';
+const loadTimePerBatch = 2.1; // seconds, from observation
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+(async () => {
+  FACEBOOK_POST_URL = fs.readFileSync('link.txt', 'utf8');
+  const browser = await puppeteer.launch({
+    headless: true, // open chrome browser
+    defaultViewport: null,
+    args: ['--start-maximized']
+  });
+
+  const page = await browser.newPage();
+
+  // Load cookies from file if available
+  if (fs.existsSync(COOKIES_PATH)) {
+    const cookies = JSON.parse(fs.readFileSync(COOKIES_PATH, 'utf8'));
+    await page.setCookie(...cookies);
+    console.log('✅ Loaded cookies from file.');
+  }
+
+  // Go to Facebook post directly
+  await page.goto(FACEBOOK_POST_URL, { waitUntil: 'networkidle2' });
+
+  // If redirected to login, allow manual login and save cookies
+  if (page.url().includes('login')) {
+    console.log('\n⏳ Please log in manually...');
+    await page.waitForNavigation({ waitUntil: 'networkidle2' });
+
+    const cookies = await page.cookies();
+    fs.writeFileSync(COOKIES_PATH, JSON.stringify(cookies, null, 2));
+    console.log('✅ Cookies saved after login.');
+
+    await page.goto(FACEBOOK_POST_URL, { waitUntil: 'networkidle2' });
+  }
+
+  // Wait for comments to load
+  await page.waitForSelector('[aria-label="Comment"]');
+
+  // Wait for "Most relevant" button and click it
+  await page.waitForFunction(() => {
+    return [...document.querySelectorAll('span')].some(el => el.textContent.includes('Most relevant'));
+  });
+
+  await page.evaluate(() => {
+    const items = [...document.querySelectorAll('span')];
+    const sortSpan = items.find(el => el.textContent.includes('Most relevant'));
+    if (sortSpan) sortSpan.click();
+  });
+
+  // Select "Newest" from the dropdown
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  await page.evaluate(() => {
+    const items = [...document.querySelectorAll('span')];
+    const newest = items.find(el => el.textContent.includes('All comments'));
+    if (newest) newest.click();
+  });
+
+  console.log('✅ Selected "All comments" sort. Now loading all comments...');
+
+  // Extract comment progress and estimate load time
+  const progressText = await page.evaluate(() => {
+    const elements = Array.from(document.querySelectorAll('span, div'))
+      .map(el => el.textContent.trim())
+      .filter(text => /^\d+\s+of\s+\d+$/.test(text));
+    return elements.length > 0 ? elements[0] : null;
+  });
+
+  if (progressText) {
+    const [loaded, total] = progressText.split('of').map(s => parseInt(s.trim(), 10));
+    const estimatedTimeSec = ((total - loaded) / loaded) * loadTimePerBatch;
+    const minutes = Math.floor(estimatedTimeSec / 60);
+    const seconds = Math.round(estimatedTimeSec % 60);
+
+    console.log(`⏱️ Estimated time to load all comments with progressText: ${minutes}m ${seconds}s`);
+  } else {
+    console.log('⚠️ Could not estimated time to load all comments.');
+
+    const input = await rl.question('💬 Please input the current comments loaded and the total comments (e.g. 6 364): ');
+    const [loadedStr, totalStr] = input.trim().split(/\s+/);
+    const loaded = parseInt(loadedStr, 10);
+    const total = parseInt(totalStr, 10);
+    if (!isNaN(loaded) && !isNaN(total) && total > loaded) {
+      const estimatedTimeSec = ((total - loaded) / loaded) * loadTimePerBatch;
+      const minutes = Math.floor(estimatedTimeSec / 60);
+      const seconds = Math.round(estimatedTimeSec % 60);
+      console.log(`⏱️ Estimated time to load all comments: ${minutes}m ${seconds}s`);
+    } else {
+      console.log('⚠️ Invalid input. Skipping time estimation.');
+    }
+  }
+
+  // Auto-scroll and click "View more comments" until fully loaded
+  try {
+    let loadMoreVisible = true;
+    while (loadMoreVisible) {
+      console.time('LoadComments');
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const clicked = await page.evaluate(() => {
+        const moreButtons = Array.from(document.querySelectorAll('span'))
+          .filter(el => el.textContent.includes('View more comments'));
+        if (moreButtons.length > 0) {
+          moreButtons[0].click();
+          return true;
+        }
+        return false;
+      });
+
+      if (!clicked) loadMoreVisible = false;
+      console.timeEnd('LoadComments');
+    }
+  } catch (e) {
+    console.log('⚠️ Error during loading comment:', e.message);
+  }
+
+  // Extract comments (text only)
+  const comments = await page.evaluate(() => {
+    const commentEls = document.querySelectorAll('div[aria-label^="Comment by"]');
+    return Array.from(commentEls).map(el => {
+      const textEl = el.querySelector('div[dir="auto"]');
+      return textEl ? textEl.innerText.trim() : '';
+    }).filter(Boolean);
+  });
+
+  // Extract numbers with length >= 2
+  const numbers = [];
+  comments.forEach(comment => {
+    const found = comment.match(/\b\d{2,}\b/g);
+    if (found) {
+      numbers.push(...found);
+    }
+  });
+
+  console.log(`✅ Total comments extracted: ${comments.length}`);
+
+  // Write file output
   const output = numbers.join('\n');
   fs.writeFileSync('facebook_comment_numbers.txt', output, 'utf8');
-  console.log('--------------------Exported numbers to facebook_comment_numbers.xlsx--------------------');
-}
-
-async function extractFacebookCommentTexts() {
-  const page = fs.readFileSync('link.txt', 'utf8');
-
-  const driver = await new Builder().forBrowser('chrome').build();
-
-  try {
-    // Load cookies from file
-    const cookies = JSON.parse(fs.readFileSync('www.facebook.com_06-07-2025.json'));
-
-    // Initial navigation required to set cookies
-    await driver.get('https://www.facebook.com');
-    for (let cookie of cookies) {
-      // Patch domain if missing
-      if (!cookie.domain) {
-        cookie.domain = '.facebook.com';
-      }
-
-      // Convert expiry to number if needed
-      if (typeof cookie.expiry === 'string') {
-        cookie.expiry = Number(cookie.expiry);
-      }
-
-      // Fix invalid SameSite value
-      if (cookie.sameSite === 'no_restriction') {
-        cookie.sameSite = 'None';
-      } else if (cookie.sameSite === 'lax') {
-        cookie.sameSite = 'Lax';
-      } else if (cookie.sameSite === 'strict') {
-        cookie.sameSite = 'Strict';
-      }
-
-      try {
-        await driver.manage().addCookie(cookie);
-      } catch (err) {
-        console.warn('Skipping invalid cookie:', cookie.name, err.message);
-      }
-    }
-
-    // Navigate to the target Facebook post/page
-    await driver.get(page);
-
-        // Try selecting "All comments" instead of "Most Relevant"
-    try {
-      await driver.wait(until.elementLocated(By.xpath("//span[contains(text(), 'Most relevant') or contains(text(), 'All comments')]")), 10000);
-      const filterButton = await driver.findElement(By.xpath("//span[contains(text(), 'Most relevant') or contains(text(), 'All comments')]"));
-      await driver.executeScript("arguments[0].scrollIntoView({behavior: 'auto', block: 'center'});", filterButton);
-      await filterButton.click();
-      await driver.sleep(1000);
-
-      const allCommentsOption = await driver.findElement(By.xpath("//span[text()='Newest']"));
-      await allCommentsOption.click();
-      await driver.sleep(2000);
-    } catch (err) {
-      console.warn('Could not switch to All Comments view:', err.message);
-    }
-
-    // Wait for page body to load
-    await driver.wait(until.elementLocated(By.css('body')), 10000);
-    console.log("--------------------Loading page done !!!--------------------")
-
-    // Scroll down incrementally to load dynamic content
-    let previousHeight = 0;
-    for (let i = 0; i < 20; i++) {
-      await driver.executeScript('window.scrollBy(0, window.innerHeight);');
-      await driver.sleep(2000);
-      const currentHeight = await driver.executeScript('return document.body.scrollHeight');
-      if (currentHeight === previousHeight) break;
-      previousHeight = currentHeight;
-    }
-
-    // Expand all comments and replies
-    while (true) {
-      const buttons = await driver.findElements(By.xpath(
-        "//span[text()='View more comments' or text()='View more replies' or text()='See more']"
-      ));
-
-      if (buttons.length === 0) break;
-
-      for (const btn of buttons) {
-        try {
-          await driver.executeScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn);
-          await driver.sleep(1000);
-          await btn.click();
-          await driver.sleep(1500);
-        } catch (err) {
-          console.warn('Could not click a button:', err.message);
-        }
-      }
-
-      await driver.sleep(1000);
-    }
-
-    console.log("--------------------Loading all comments done !!!!--------------------")
-
-    // Wait for any comment/message element to appear
-    await driver.wait(until.elementsLocated(By.xpath("//div[@role='article']//div[@dir='auto' and string-length(text()) > 0]")), 10000);
-
-    // Get all visible comment/message blocks
-    const commentElements = await driver.findElements(By.xpath("//div[@role='article']//div[@dir='auto' and string-length(text()) > 0]"));
-    console.log(`--------------------Found comment/message elements: ${commentElements.length}--------------------`)
-
-    let commentTexts = new Set();
-
-    for (let el of commentElements) {
-      let text = await el.getText();
-      if (text.trim()) {
-        commentTexts.add(text.trim());
-      }
-    }
-
-    let allNumbers = Array.from(commentTexts)
-      .map(text => text.match(/\d+/g))
-      .filter(matches => matches !== null)
-      .flat();
-
-    exportNumbersToExcel(allNumbers);
-  } catch (err) {
-    console.error('Error:', err);
-  } finally {
-    await driver.quit();
-  }
-}
-
-extractFacebookCommentTexts();
+  console.log(`✅ Exported list numbers of comment to facebook_comment_numbers.txt`);
+  exec(process.platform === 'win32' ? 'start facebook_comment_numbers.txt' :
+    process.platform === 'darwin' ? 'open facebook_comment_numbers.txt' :
+      'xdg-open facebook_comment_numbers.txt');
+  await browser.close();
+})();
