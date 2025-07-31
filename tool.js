@@ -4,7 +4,7 @@ const readline = require('readline/promises');
 const { exec } = require('child_process');
 
 var FACEBOOK_POST_URL = '';
-const COOKIES_PATH = './www.facebook.com_21-07-2025.json';
+const COOKIES_PATH = './www.facebook.com_28-07-2025.json';
 const loadTimePerBatch = 2.1; // seconds, from observation
 
 const rl = readline.createInterface({
