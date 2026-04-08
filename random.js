@@ -39,5 +39,4 @@ function generateUniqueRandomNumberFromFile(filePath, min, max) {
   
   return randomNumber;
 }
-
-generateUniqueRandomNumberFromFile('facebook_comment_numbers.txt', 0, 99)
+generateUniqueRandomNumberFromFile('facebook_comment_numbers.txt', 0,999)
