@@ -137,7 +137,7 @@ async function runCrawl() {
   const FACEBOOK_POST_URL = fs.readFileSync(linkPath(), 'utf8').trim();
 
   const launchOptions = {
-    headless: false,
+    headless: true,
     defaultViewport: null,
     args: ['--start-maximized']
   };
