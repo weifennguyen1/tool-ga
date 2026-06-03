@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GA Tool</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="bg-shapes" aria-hidden="true"></div>
+
+  <main class="dashboard">
+    <header class="top-bar">
+      <div>
+        <span class="badge">🌈 GA Tool</span>
+        <h1>Facebook &amp; quay số</h1>
+      </div>
+      <span id="jobBadge" class="job-badge idle">Sẵn sàng</span>
+    </header>
+
+    <div class="grid">
+      <div class="col col-settings">
+        <section class="card">
+          <h2>🔗 Link bài viết</h2>
+          <input type="url" id="linkInput" placeholder="https://www.facebook.com/..." />
+          <div class="btn-row btn-row-3">
+            <button type="button" class="btn btn-primary" id="saveLinkBtn">Lưu link</button>
+            <button type="button" class="btn btn-outline" id="openLinkBtn" title="Mở link hiện tại">Mở link ↗</button>
+            <button type="button" class="btn btn-outline" id="viewHistoryBtn" title="Xem số đã quay cho link này">Số đã quay</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>🍪 Cookie Facebook</h2>
+          <p class="hint">Tự scan <code>assets/www.facebook.com_DD-MM-YYYY.json</code> mới nhất</p>
+          <label class="file-label">
+            <input type="file" id="cookieFile" accept=".json,application/json" hidden />
+            <span class="btn btn-secondary btn-sm">Import profile</span>
+          </label>
+          <p id="cookieStatus" class="status-text">Chưa import</p>
+        </section>
+
+        <section class="card">
+          <h2>🎲 Khoảng số</h2>
+          <div class="range-inline">
+            <label>Từ <input type="number" id="minInput" min="0" value="0" /></label>
+            <label>Đến <input type="number" id="maxInput" min="0" value="9999" /></label>
+            <button type="button" class="btn btn-primary btn-sm" id="saveRangeBtn">Lưu</button>
+          </div>
+        </section>
+
+        <section class="card card-lucky">
+          <h2>✨ Quay số may mắn</h2>
+          <div id="luckyNumber" class="lucky-number" aria-live="polite">—</div>
+          <p id="luckyHint" class="lucky-hint">Nhấn quay để hiện số tại đây</p>
+          <button type="button" class="btn btn-random" id="randomBtn">Quay số ngẫu nhiên</button>
+          <p class="footnote">Kết quả lưu vết trong <code>assets/ga-result.xlsx</code></p>
+        </section>
+      </div>
+
+      <div class="col col-work">
+        <section class="card card-work">
+          <h2>💬 Thu thập bình luận &amp; nhật ký</h2>
+          <p class="hint">Mở Chrome quét comment — log hiển thị bên dưới</p>
+          <button type="button" class="btn btn-crawl" id="crawlBtn">Bắt đầu thu thập bình luận</button>
+          <pre id="logBox" class="log-box"></pre>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div id="historyModal" class="modal" hidden aria-hidden="true">
+    <div class="modal-backdrop" id="historyBackdrop"></div>
+    <div class="modal-box" role="dialog" aria-labelledby="historyTitle">
+      <header class="modal-header">
+        <h3 id="historyTitle">Số đã quay</h3>
+        <button type="button" class="modal-close" id="closeHistoryModal" aria-label="Đóng">×</button>
+      </header>
+      <p id="historyLinkPreview" class="modal-link"></p>
+      <div id="historyContent" class="modal-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
-
-const COOKIES_PATH = './www.facebook.com_21-05-2026.json';
+const { resolveCookiesPath } = require('./lib/cookies');
+const { linkPath, numbersPath } = require('./lib/paths');
 const SORT_WAIT_MS = 8000;
 const SORT_PATTERN =
   'most relevant|phù hợp nhất|newest|mới nhất|all comments|tất cả bình luận|top comments';
@@ -126,11 +126,18 @@ async function trySwitchCommentSort(page) {
   return !!picked;
 }
 
-(async () => {
-  const FACEBOOK_POST_URL = fs.readFileSync('link.txt', 'utf8').trim();
+async function runCrawl() {
+  const cookie = resolveCookiesPath();
+  if (cookie.requiresImport) {
+    throw new Error(
+      'Chưa có file cookie Facebook (www.facebook.com_DD-MM-YYYY.json). Import profile trên web UI.'
+    );
+  }
+  const COOKIES_PATH = cookie.path;
+  const FACEBOOK_POST_URL = fs.readFileSync(linkPath(), 'utf8').trim();
 
   const launchOptions = {
-    headless: true,
+    headless: false,
     defaultViewport: null,
     args: ['--start-maximized']
   };
@@ -221,8 +228,17 @@ async function trySwitchCommentSort(page) {
     if (found) numbers.push(...found);
   });
 
-  fs.writeFileSync('facebook_comment_numbers.txt', numbers.join('\n'));
+  fs.writeFileSync(numbersPath(), numbers.join('\n'));
   console.log('✅ Exported file');
 
   await browser.close();
-})();
+}
+
+if (require.main === module) {
+  runCrawl().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = { runCrawl };
